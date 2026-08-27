@@ -577,6 +577,12 @@ bot.catch((err) => {
   }
 });
 
+// ====== MINI APP ======
+
+app.get('/miniapp', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
 // ====== EXPRESS API ======
 
 app.get(
