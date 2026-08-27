@@ -100,7 +100,7 @@ bot.command('start', async (ctx) => {
       `⭐ Pro: $5/mo → 5 groups + AI insights\\n` +
       `🏢 Business: $15/mo → unlimited + API`,
       {
-        parse_mode: 'MarkdownV2',
+        parse_mode: 'Markdown',
         reply_markup: keyboard
       }
     );
@@ -134,7 +134,7 @@ bot.command('help', async (ctx) => {
     `/ai \\- AI Analysis\\n` +
     `/support \\- Help`,
     {
-      parse_mode: 'MarkdownV2'
+      parse_mode: 'Markdown'
     }
   );
 });
@@ -156,7 +156,7 @@ bot.command('stats', async (ctx) => {
     `⏳ Pending: ${stats.pending}\\n\\n` +
     `💰 Earn 5 credits per friend!`,
     {
-      parse_mode: 'MarkdownV2',
+      parse_mode: 'Markdown',
       reply_markup: keyboard
     }
   );
@@ -202,7 +202,7 @@ bot.command('upgrade', async (ctx) => {
     `⭐ *Pro* \\- $5/month\\n5 groups · AI insights · advanced stats\\n\\n` +
     `🏢 *Business* \\- $15/month\\nUnlimited · full analytics · API access`,
     {
-      parse_mode: 'MarkdownV2',
+      parse_mode: 'Markdown',
       reply_markup: keyboard
     }
   );
@@ -248,7 +248,7 @@ bot.command('ai', async (ctx) => {
       .map((t: string, i: number) => `${i + 1}. ${t}`)
       .join('\\n'),
     {
-      parse_mode: 'MarkdownV2'
+      parse_mode: 'Markdown'
     }
   );
 });
@@ -277,7 +277,7 @@ bot.callbackQuery('referral_stats', async (ctx) => {
 `🔗 *Your Link:*\n\`${link}\`\n\n` +
     `💰 Earn 5 credits per friend!`,
     {
-      parse_mode: 'MarkdownV2'
+      parse_mode: 'Markdown'
     }
   );
 
@@ -315,7 +315,7 @@ bot.callbackQuery('back_start', async (ctx) => {
   await ctx.editMessageText(
     `👋 *Growlytics*\\n\\nAI-powered community analytics.`,
     {
-      parse_mode: 'MarkdownV2',
+      parse_mode: 'Markdown',
       reply_markup: keyboard
     }
   );
@@ -337,7 +337,7 @@ bot.callbackQuery('show_upgrade', async (ctx) => {
     `⭐ Pro \\- $5/month\\n5 groups · AI insights · advanced stats\\n\\n` +
     `🏢 Business \\- $15/month\\nUnlimited · full analytics · API access`,
     {
-      parse_mode: 'MarkdownV2',
+      parse_mode: 'Markdown',
       reply_markup: keyboard
     }
   );
