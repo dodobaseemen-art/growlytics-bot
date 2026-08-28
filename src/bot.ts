@@ -514,9 +514,6 @@ bot.on('message', async (ctx) => {
 
   try {
     const groupId = ctx.chat.id;
-    const userId = ctx.from?.id;
-
-    if (!userId) return;
 
     const date = new Date()
       .toISOString()
@@ -525,16 +522,14 @@ bot.on('message', async (ctx) => {
     // Make sure the group exists
 await pool.query(
   `INSERT INTO groups
-   (telegram_group_id, group_name, added_by)
-   VALUES ($1, $2, $3)
+   (telegram_group_id, group_name)
+   VALUES ($1, $2)
    ON CONFLICT (telegram_group_id)
    DO UPDATE SET
-     group_name = EXCLUDED.group_name,
-     added_by = COALESCE(groups.added_by, EXCLUDED.added_by)`,
+     group_name = EXCLUDED.group_name`,
   [
     groupId,
-    ctx.chat.title || 'Unknown',
-    userId
+    ctx.chat.title || 'Unknown'
   ]
 );
 
@@ -556,6 +551,56 @@ await pool.query(
   } catch (err) {
     console.error(
       'Analytics error:',
+      err
+    );
+  }
+});
+bot.on('my_chat_member', async (ctx) => {
+  const chat = ctx.myChatMember.chat;
+
+  if (
+    chat.type === 'private' ||
+    ctx.myChatMember.new_chat_member.user.is_bot === false
+  ) {
+    return;
+  }
+
+  const oldStatus =
+    ctx.myChatMember.old_chat_member.status;
+
+  const newStatus =
+    ctx.myChatMember.new_chat_member.status;
+
+  const botWasAdded =
+    ['left', 'kicked'].includes(oldStatus) &&
+    ['member', 'administrator'].includes(newStatus);
+
+  if (!botWasAdded) return;
+
+  const addedBy = ctx.from.id;
+
+  try {
+    await pool.query(
+      `INSERT INTO groups
+       (telegram_group_id, group_name, added_by)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (telegram_group_id)
+       DO UPDATE SET
+         group_name = EXCLUDED.group_name,
+         added_by = EXCLUDED.added_by`,
+      [
+        chat.id,
+        chat.title || 'Unknown',
+        addedBy
+      ]
+    );
+
+    console.log(
+      `Group registered: ${chat.id} by ${addedBy}`
+    );
+  } catch (err) {
+    console.error(
+      'Group registration error:',
       err
     );
   }
