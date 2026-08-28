@@ -557,6 +557,77 @@ bot.on('message', async (ctx) => {
     );
   }
 });
+bot.on(':new_chat_members', async (ctx) => {
+  if (
+    !ctx.chat ||
+    ctx.chat.type === 'private'
+  ) {
+    return;
+  }
+
+  const date = new Date()
+    .toISOString()
+    .split('T')[0];
+
+  const count =
+    ctx.message?.new_chat_members?.length || 1;
+
+  try {
+    await pool.query(
+      `INSERT INTO analytics
+       (group_id, date, new_members)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (group_id, date)
+       DO UPDATE SET
+         new_members =
+           analytics.new_members + $3`,
+      [
+        ctx.chat.id,
+        date,
+        count
+      ]
+    );
+  } catch (err) {
+    console.error(
+      'New member analytics error:',
+      err
+    );
+  }
+});
+
+bot.on(':left_chat_member', async (ctx) => {
+  if (
+    !ctx.chat ||
+    ctx.chat.type === 'private'
+  ) {
+    return;
+  }
+
+  const date = new Date()
+    .toISOString()
+    .split('T')[0];
+
+  try {
+    await pool.query(
+      `INSERT INTO analytics
+       (group_id, date, left_members)
+       VALUES ($1, $2, 1)
+       ON CONFLICT (group_id, date)
+       DO UPDATE SET
+         left_members =
+           analytics.left_members + 1`,
+      [
+        ctx.chat.id,
+        date
+      ]
+    );
+  } catch (err) {
+    console.error(
+      'Left member analytics error:',
+      err
+    );
+  }
+});
 // ====== ERROR HANDLING ======
 
 bot.catch((err) => {
