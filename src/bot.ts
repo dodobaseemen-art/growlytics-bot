@@ -532,7 +532,24 @@ await pool.query(
     ctx.chat.title || 'Unknown'
   ]
 );
+console.log(
+  `📩 Message received in group ${groupId}`
+);
 
+// Record today's message activity
+await pool.query(
+  `INSERT INTO analytics
+   (group_id, date, messages_count, active_users)
+   VALUES ($1, $2, 1, 1)
+   ON CONFLICT (group_id, date)
+   DO UPDATE SET
+     messages_count =
+       analytics.messages_count + 1`,
+  [
+    groupId,
+    date
+  ]
+);
     // Record today's message activity
     await pool.query(
       `INSERT INTO analytics
