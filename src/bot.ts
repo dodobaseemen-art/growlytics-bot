@@ -893,8 +893,14 @@ app.listen(PORT, async () => {
       `${process.env.WEB_APP_URL}${WEBHOOK_PATH}`;
 
     await bot.api.setWebhook(
-      webhookUrl
-    );
+  webhookUrl,
+  {
+    allowed_updates: [
+      'message',
+      'my_chat_member'
+    ]
+  }
+);
 
     console.log(
       `🔗 Webhook set: ${webhookUrl}`
