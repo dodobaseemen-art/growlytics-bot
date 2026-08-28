@@ -452,9 +452,19 @@ bot.callbackQuery('pay_pro', async (ctx) => {
       'pro'
     );
 
-    await ctx.answerCallbackQuery({
-      url: invoiceLink
-    });
+    await ctx.reply(
+      '⭐ Growlytics Pro\n\n' +
+      '250 Telegram Stars / 30 days\n\n' +
+      'اضغط الزر بالأسفل لإتمام الدفع:',
+      {
+        reply_markup: new InlineKeyboard().url(
+          '⭐ Pay with Telegram Stars',
+          invoiceLink
+        )
+      }
+    );
+
+    await ctx.answerCallbackQuery();
   } catch (err) {
     console.error('Stars Pro payment error:', err);
 
@@ -464,6 +474,7 @@ bot.callbackQuery('pay_pro', async (ctx) => {
   }
 });
 
+// ====== ANALYTICS TRACKING ======
 bot.callbackQuery('pay_business', async (ctx) => {
   if (!ctx.from) return;
 
@@ -474,20 +485,30 @@ bot.callbackQuery('pay_business', async (ctx) => {
       'business'
     );
 
-    await ctx.answerCallbackQuery({
-      url: invoiceLink
-    });
+    await ctx.reply(
+      '🏢 Growlytics Business\n\n' +
+      '750 Telegram Stars / 30 days\n\n' +
+      'اضغط الزر بالأسفل لإتمام الدفع:',
+      {
+        reply_markup: new InlineKeyboard().url(
+          '⭐ Pay with Telegram Stars',
+          invoiceLink
+        )
+      }
+    );
+
+    await ctx.answerCallbackQuery();
   } catch (err) {
-    console.error('Stars Business payment error:', err);
+    console.error(
+      'Stars Business payment error:',
+      err
+    );
 
     await ctx.answerCallbackQuery({
       text: 'Error creating Stars payment.'
     });
   }
 });
-
-// ====== ANALYTICS TRACKING ======
-
 bot.on('message', async (ctx) => {
   if (!ctx.chat || ctx.chat.type === 'private') return;
 
