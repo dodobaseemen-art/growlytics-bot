@@ -18,8 +18,11 @@ async function loadStats() {
     document.getElementById('groups').textContent =
       data.groups?.length || 0;
 
-    document.getElementById('referrals').textContent =
-      data.referrals?.converted || 0;
+   document.getElementById('referrals').textContent =
+  data.referrals?.converted || 0;
+
+document.getElementById('messages').textContent =
+  data.analytics?.messages || 0;
 
     const plan = data.user?.plan || 'free';
     const badge = document.getElementById('plan-badge');

@@ -745,6 +745,18 @@ app.get(
         [userId]
       );
 
+      const analytics = await pool.query(
+        `SELECT
+           COALESCE(SUM(messages_count), 0) AS messages
+         FROM analytics
+         WHERE group_id IN (
+           SELECT telegram_group_id
+           FROM groups
+           WHERE added_by = $1
+         )`,
+        [userId]
+      );
+
       const referrals =
         await getReferralStats(userId);
 
@@ -759,6 +771,12 @@ app.get(
       res.json({
         user: user.rows[0] || null,
         groups: groups.rows,
+        analytics: {
+          messages: parseInt(
+            analytics.rows[0].messages,
+            10
+          )
+        },
         referrals,
         payments: payments.rows
       });
