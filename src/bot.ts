@@ -22,6 +22,7 @@ import {
   generateGrowthTips
 } from './utils/ai';
 import paymentsRouter from './routes/payments';
+import { createStarsInvoice } from './utils/stars';
 import webhookRouter from './routes/webhook';
 
 dotenv.config();
@@ -34,6 +35,102 @@ app.use(express.json());
 app.use('/api/payments', paymentsRouter);
 app.use('/webhook', webhookRouter);
 app.use(express.static(path.join(__dirname, '../public')));
+
+// ====== TELEGRAM STARS PAYMENT HANDLERS ======
+
+bot.on('pre_checkout_query', async (ctx) => {
+  try {
+    await ctx.answerPreCheckoutQuery(true);
+  } catch (err) {
+    console.error('Stars pre-checkout error:', err);
+  }
+});
+
+bot.on('message:successful_payment', async (ctx) => {
+  try {
+    const payment = ctx.message.successful_payment;
+
+    const payload = JSON.parse(payment.invoice_payload);
+    const userId = Number(payload.userId);
+    const plan = payload.plan;
+
+    if (
+      !userId ||
+      (plan !== 'pro' && plan !== 'business')
+    ) {
+      console.error('Invalid Stars payment payload:', payment.invoice_payload);
+      return;
+    }
+
+    const expectedAmount = plan === 'pro' ? 250 : 750;
+
+    if (
+      payment.currency !== 'XTR' ||
+      payment.total_amount !== expectedAmount
+    ) {
+      console.error('Invalid Stars payment amount:', payment.total_amount);
+      return;
+    }
+
+    await pool.query(
+      `UPDATE users
+       SET plan = $1
+       WHERE telegram_id = $2`,
+      [plan, userId]
+    );
+
+    await pool.query(
+      `INSERT INTO payments
+       (user_id, amount, currency, plan, status, provider,
+        provider_payment_id, paid_at)
+       VALUES
+       (
+         (SELECT id FROM users WHERE telegram_id = $1),
+         $2,
+         'XTR',
+         $3,
+         'completed',
+         'telegram_stars',
+         $4,
+         NOW()
+       )`,
+      [
+        userId,
+        payment.total_amount,
+        plan,
+        payment.telegram_payment_charge_id
+      ]
+    );
+
+    await pool.query(
+      `INSERT INTO usage_logs
+       (user_id, action, details)
+       VALUES (
+         (SELECT id FROM users WHERE telegram_id = $1),
+         $2,
+         $3
+       )`,
+      [
+        userId,
+        'subscription_activated',
+        JSON.stringify({
+          plan,
+          provider: 'telegram_stars',
+          charge_id: payment.telegram_payment_charge_id
+        })
+      ]
+    );
+
+    await ctx.reply(
+      `🎉 Payment successful!\n\n` +
+      `💎 Your ${plan.toUpperCase()} plan is now active.\n\n` +
+      `⭐ Paid with Telegram Stars.`
+    );
+  } catch (err) {
+    console.error('Stars successful payment error:', err);
+  }
+});
+
 
 // ====== BOT COMMANDS ======
 
@@ -349,44 +446,20 @@ bot.callbackQuery('pay_pro', async (ctx) => {
   if (!ctx.from) return;
 
   try {
-    const successUrl =
-      `${process.env.WEB_APP_URL}/miniapp?success=1`;
-
-    const cancelUrl =
-      `${process.env.WEB_APP_URL}/miniapp?canceled=1`;
-
-    const res = await fetch(
-      `${process.env.WEB_APP_URL}/api/payments/create-checkout`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          userId: ctx.from.id,
-          plan: 'pro',
-          successUrl,
-          cancelUrl
-        })
-      }
+    const invoiceLink = await createStarsInvoice(
+      bot,
+      ctx.from.id,
+      'pro'
     );
 
-    const data = await res.json();
-
-    if (data.url) {
-      await ctx.answerCallbackQuery({
-        url: data.url
-      });
-    } else {
-      await ctx.answerCallbackQuery({
-        text: 'Payment setup failed. Try again.'
-      });
-    }
+    await ctx.answerCallbackQuery({
+      url: invoiceLink
+    });
   } catch (err) {
-    console.error('Payment error:', err);
+    console.error('Stars Pro payment error:', err);
 
     await ctx.answerCallbackQuery({
-      text: 'Error creating payment.'
+      text: 'Error creating Stars payment.'
     });
   }
 });
@@ -395,44 +468,20 @@ bot.callbackQuery('pay_business', async (ctx) => {
   if (!ctx.from) return;
 
   try {
-    const successUrl =
-      `${process.env.WEB_APP_URL}/miniapp?success=1`;
-
-    const cancelUrl =
-      `${process.env.WEB_APP_URL}/miniapp?canceled=1`;
-
-    const res = await fetch(
-      `${process.env.WEB_APP_URL}/api/payments/create-checkout`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          userId: ctx.from.id,
-          plan: 'business',
-          successUrl,
-          cancelUrl
-        })
-      }
+    const invoiceLink = await createStarsInvoice(
+      bot,
+      ctx.from.id,
+      'business'
     );
 
-    const data = await res.json();
-
-    if (data.url) {
-      await ctx.answerCallbackQuery({
-        url: data.url
-      });
-    } else {
-      await ctx.answerCallbackQuery({
-        text: 'Payment setup failed. Try again.'
-      });
-    }
+    await ctx.answerCallbackQuery({
+      url: invoiceLink
+    });
   } catch (err) {
-    console.error('Payment error:', err);
+    console.error('Stars Business payment error:', err);
 
     await ctx.answerCallbackQuery({
-      text: 'Error creating payment.'
+      text: 'Error creating Stars payment.'
     });
   }
 });
