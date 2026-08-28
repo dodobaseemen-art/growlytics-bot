@@ -61,9 +61,7 @@ export async function createStarsInvoice(
           amount: selectedPlan.stars
         }
       ],
-      {
-        subscription_period: 2592000
-      }
+      {}
     );
 
   return invoiceLink;
