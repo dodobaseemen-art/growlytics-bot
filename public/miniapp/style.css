@@ -1,0 +1,72 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f0f23; color: #fff; min-height: 100vh;
+}
+.app { max-width: 430px; margin: 0 auto; padding-bottom: 80px; }
+header {
+  padding: 20px; display: flex; justify-content: space-between; align-items: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+header h1 { font-size: 20px; }
+.badge { padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.badge.free { background: #22c55e; }
+.badge.pro { background: #f59e0b; }
+.badge.business { background: #8b5cf6; }
+
+.stats-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px;
+}
+.card {
+  background: #1a1a2e; border-radius: 16px; padding: 16px; text-align: center;
+  border: 1px solid #2d2d44;
+}
+.card .value { font-size: 28px; font-weight: 700; color: #667eea; }
+.card .label { font-size: 12px; color: #888; margin-top: 4px; }
+
+.section { padding: 16px; }
+.section h3 { margin-bottom: 12px; font-size: 16px; }
+
+.ai-card {
+  background: #1a1a2e; border-radius: 12px; padding: 16px;
+  border-left: 4px solid #667eea; margin-bottom: 12px;
+  font-size: 14px; line-height: 1.6;
+}
+#ai-tips { display: flex; flex-direction: column; gap: 8px; }
+.tip {
+  background: #1a1a2e; border-radius: 10px; padding: 12px;
+  font-size: 13px; border: 1px solid #2d2d44;
+}
+
+.plans { display: flex; gap: 12px; }
+.plan-card {
+  flex: 1; background: #1a1a2e; border-radius: 16px; padding: 16px;
+  border: 2px solid #2d2d44; cursor: pointer;
+}
+.plan-card:hover { border-color: #667eea; }
+.plan-name { font-weight: 600; margin-bottom: 4px; }
+.plan-price { font-size: 20px; color: #667eea; margin-bottom: 8px; }
+.plan-card ul { list-style: none; font-size: 12px; color: #aaa; margin-bottom: 12px; }
+.plan-card li { margin: 4px 0; }
+.plan-card button {
+  width: 100%; padding: 10px; border: none; border-radius: 10px;
+  background: #667eea; color: #fff; font-weight: 600; cursor: pointer;
+}
+
+.referral-box { display: flex; gap: 8px; margin-top: 8px; }
+.referral-box input {
+  flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #2d2d44;
+  background: #1a1a2e; color: #fff; font-size: 12px;
+}
+.referral-box button {
+  padding: 12px 20px; border-radius: 10px; border: none;
+  background: #22c55e; color: #fff; font-weight: 600; cursor: pointer;
+}
+
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; max-width: 430px; margin: 0 auto;
+  display: flex; justify-content: space-around; padding: 12px;
+  background: #1a1a2e; border-top: 1px solid #2d2d44;
+}
+.bottom-nav a { color: #888; text-decoration: none; font-size: 12px; text-align: center; }
+.bottom-nav a.active { color: #667eea; }

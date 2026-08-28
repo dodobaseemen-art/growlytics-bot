@@ -2,11 +2,65 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Growlytics</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
-  <h1>📊 Growlytics</h1>
-  <p>AI-powered community analytics</p>
+  <div class="app">
+    <header>
+      <h1>📊 Growlytics</h1>
+      <span id="plan-badge" class="badge free">FREE</span>
+    </header>
+    
+    <div class="stats-grid">
+      <div class="card"><div class="value" id="credits">10</div><div class="label">Credits</div></div>
+      <div class="card"><div class="value" id="groups">0</div><div class="label">Groups</div></div>
+      <div class="card"><div class="value" id="referrals">0</div><div class="label">Referrals</div></div>
+      <div class="card"><div class="value" id="messages">0</div><div class="label">Messages</div></div>
+    </div>
+    
+    <div class="section" id="ai-section">
+      <h3>🤖 AI Insights</h3>
+      <div class="ai-card" id="ai-insight">Loading AI analysis...</div>
+      <div id="ai-tips"></div>
+    </div>
+    
+    <div class="section">
+      <h3>💎 Upgrade Plan</h3>
+      <div class="plans">
+        <div class="plan-card" onclick="selectPlan('pro')">
+          <div class="plan-name">⭐ Pro</div>
+          <div class="plan-price">$5/mo</div>
+          <ul><li>5 groups</li><li>AI insights</li><li>Advanced stats</li></ul>
+          <button>Upgrade</button>
+        </div>
+        <div class="plan-card" onclick="selectPlan('business')">
+          <div class="plan-name">🏢 Business</div>
+          <div class="plan-price">$15/mo</div>
+          <ul><li>Unlimited groups</li><li>Full analytics</li><li>API access</li></ul>
+          <button>Upgrade</button>
+        </div>
+      </div>
+    </div>
+    
+    <div class="section">
+      <h3>🎁 Referral Program</h3>
+      <p>Share your link, earn 5 credits per friend!</p>
+      <div class="referral-box">
+        <input type="text" id="ref-link" readonly>
+        <button onclick="copyRef()">Copy</button>
+      </div>
+    </div>
+    
+    <nav class="bottom-nav">
+      <a href="#" class="active" onclick="showSection('stats')">📊 Stats</a>
+      <a href="#" onclick="showSection('upgrade')">💎 Upgrade</a>
+      <a href="#" onclick="showSection('referral')">🎁 Refer</a>
+      <a href="/dashboard" target="_blank">⚙️ Admin</a>
+    </nav>
+  </div>
+  <script src="app.js"></script>
 </body>
 </html>
