@@ -523,17 +523,20 @@ bot.on('message', async (ctx) => {
       .split('T')[0];
 
     // Make sure the group exists
-    await pool.query(
-      `INSERT INTO groups
-       (telegram_group_id, group_name)
-       VALUES ($1, $2)
-       ON CONFLICT (telegram_group_id)
-       DO UPDATE SET group_name = $2`,
-      [
-        groupId,
-        ctx.chat.title || 'Unknown'
-      ]
-    );
+await pool.query(
+  `INSERT INTO groups
+   (telegram_group_id, group_name, added_by)
+   VALUES ($1, $2, $3)
+   ON CONFLICT (telegram_group_id)
+   DO UPDATE SET
+     group_name = EXCLUDED.group_name,
+     added_by = COALESCE(groups.added_by, EXCLUDED.added_by)`,
+  [
+    groupId,
+    ctx.chat.title || 'Unknown',
+    userId
+  ]
+);
 
     // Record today's message activity
     await pool.query(
