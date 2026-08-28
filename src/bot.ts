@@ -516,12 +516,13 @@ bot.on('message', async (ctx) => {
     const groupId = ctx.chat.id;
     const userId = ctx.from?.id;
 
+    if (!userId) return;
+
     const date = new Date()
       .toISOString()
       .split('T')[0];
 
-    const hour = new Date().getHours();
-
+    // Make sure the group exists
     await pool.query(
       `INSERT INTO groups
        (telegram_group_id, group_name)
@@ -534,24 +535,21 @@ bot.on('message', async (ctx) => {
       ]
     );
 
+    // Record today's message activity
     await pool.query(
       `INSERT INTO analytics
-       (group_id, date, messages_count, active_users, peak_hour)
-       VALUES ($1, $2, 1, 1, $3)
+       (group_id, date, messages_count, active_users)
+       VALUES ($1, $2, 1, 1)
        ON CONFLICT (group_id, date)
        DO UPDATE SET
          messages_count =
-           analytics.messages_count + 1,
-         active_users =
-           analytics.active_users + 1,
-         peak_hour =
-           GREATEST(analytics.peak_hour, $3)`,
+           analytics.messages_count + 1`,
       [
         groupId,
-        date,
-        hour
+        date
       ]
     );
+
   } catch (err) {
     console.error(
       'Analytics error:',
@@ -559,65 +557,6 @@ bot.on('message', async (ctx) => {
     );
   }
 });
-
-bot.on(':new_chat_members', async (ctx) => {
-  if (
-    !ctx.chat ||
-    ctx.chat.type === 'private'
-  ) {
-    return;
-  }
-
-  const date = new Date()
-    .toISOString()
-    .split('T')[0];
-
-  const count =
-    ctx.message?.new_chat_members?.length || 1;
-
-  await pool.query(
-    `INSERT INTO analytics
-     (group_id, date, new_members)
-     VALUES ($1, $2, $3)
-     ON CONFLICT (group_id, date)
-     DO UPDATE SET
-       new_members =
-         analytics.new_members + $3`,
-    [
-      ctx.chat.id,
-      date,
-      count
-    ]
-  );
-});
-
-bot.on(':left_chat_member', async (ctx) => {
-  if (
-    !ctx.chat ||
-    ctx.chat.type === 'private'
-  ) {
-    return;
-  }
-
-  const date = new Date()
-    .toISOString()
-    .split('T')[0];
-
-  await pool.query(
-    `INSERT INTO analytics
-     (group_id, date, left_members)
-     VALUES ($1, $2, 1)
-     ON CONFLICT (group_id, date)
-     DO UPDATE SET
-       left_members =
-         analytics.left_members + 1`,
-    [
-      ctx.chat.id,
-      date
-    ]
-  );
-});
-
 // ====== ERROR HANDLING ======
 
 bot.catch((err) => {
