@@ -49,8 +49,19 @@ bot.on('pre_checkout_query', async (ctx) => {
 bot.on('message:successful_payment', async (ctx) => {
   try {
     const payment = ctx.message.successful_payment;
+    if (!payment?.invoice_payload) {
+      console.error('Missing invoice payload');
+      return;
+    }
 
-    const payload = JSON.parse(payment.invoice_payload);
+    let payload: { userId?: number; plan?: string };
+    try {
+      payload = JSON.parse(payment.invoice_payload);
+    } catch {
+      console.error('Invalid JSON in invoice payload:', payment.invoice_payload);
+      return;
+    }
+
     const userId = Number(payload.userId);
     const plan = payload.plan;
 
@@ -136,10 +147,13 @@ bot.on('message:successful_payment', async (ctx) => {
 
 bot.command('start', async (ctx) => {
   const user = ctx.from;
-  if (!user) return;
+  if (!user || !ctx.message) return;
+
+  // استخراج الـ payload بعد /start بشكل آمن
+  const text = ctx.message.text || '';
+  const startPayload = text.split(' ').slice(1).join(' ').trim();
 
   const referralCode = generateReferralCode(user.id);
-  const startPayload = ctx.match;
 
   try {
     await pool.query(
@@ -160,9 +174,9 @@ bot.command('start', async (ctx) => {
 
     if (
       startPayload &&
-      startPayload.toString().startsWith('ref')
+      startPayload.startsWith('ref')
     ) {
-      const refCode = startPayload.toString();
+      const refCode = startPayload;
 
       const referrer = await pool.query(
         `SELECT telegram_id
@@ -190,11 +204,11 @@ bot.command('start', async (ctx) => {
       .text('🎁 Referral', 'referral_stats');
 
     await ctx.reply(
-      `👋 Welcome to *Growlytics*!\\n\\n` +
-      `📊 AI-powered community analytics.\\n` +
-`🔗 Code: \`${referralCode}\`\n\n` +
-      `✨ Free: 1 group · 10 credits\\n` +
-      `⭐ Pro: $5/mo → 5 groups + AI insights\\n` +
+      `👋 Welcome to *Growlytics*!\n\n` +
+      `📊 AI-powered community analytics.\n` +
+      `🔗 Code: \`${referralCode}\`\n\n` +
+      `✨ Free: 1 group · 10 credits\n` +
+      `⭐ Pro: $5/mo → 5 groups + AI insights\n` +
       `🏢 Business: $15/mo → unlimited + API`,
       {
         parse_mode: 'Markdown',
@@ -222,13 +236,13 @@ bot.command('start', async (ctx) => {
 
 bot.command('help', async (ctx) => {
   await ctx.reply(
-    `📖 *Growlytics*\\n\\n` +
-    `/start \\- Dashboard\\n` +
-    `/help \\- This menu\\n` +
-    `/stats \\- Referrals\\n` +
-    `/usage \\- Your usage\\n` +
-    `/upgrade \\- Plans\\n` +
-    `/ai \\- AI Analysis\\n` +
+    `📖 *Growlytics*\n\n` +
+    `/start \\- Dashboard\n` +
+    `/help \\- This menu\n` +
+    `/stats \\- Referrals\n` +
+    `/usage \\- Your usage\n` +
+    `/upgrade \\- Plans\n` +
+    `/ai \\- AI Analysis\n` +
     `/support \\- Help`,
     {
       parse_mode: 'Markdown'
@@ -247,10 +261,10 @@ bot.command('stats', async (ctx) => {
     .text('🔙 Back', 'back_start');
 
   await ctx.reply(
-    `🎯 *Your Referrals*\\n\\n` +
-    `Total: ${stats.total}\\n` +
-    `✅ Converted: ${stats.converted}\\n` +
-    `⏳ Pending: ${stats.pending}\\n\\n` +
+    `🎯 *Your Referrals*\n\n` +
+    `Total: ${stats.total}\n` +
+    `✅ Converted: ${stats.converted}\n` +
+    `⏳ Pending: ${stats.pending}\n\n` +
     `💰 Earn 5 credits per friend!`,
     {
       parse_mode: 'Markdown',
@@ -277,11 +291,12 @@ bot.command('usage', async (ctx) => {
   );
 
   await ctx.reply(
-    `📊 *Your Account*\\n\\n` +
-    `Plan: ${user.rows[0]?.plan || 'free'}\\n` +
-    `Credits: ${user.rows[0]?.credits || 0}\\n` +
-    `Groups: ${groups.rows[0].count}\\n\\n` +
-    `Open Mini App for full dashboard.`
+    `📊 *Your Account*\n\n` +
+    `Plan: ${user.rows[0]?.plan || 'free'}\n` +
+    `Credits: ${user.rows[0]?.credits || 0}\n` +
+    `Groups: ${groups.rows[0].count}\n\n` +
+    `Open Mini App for full dashboard.`,
+    { parse_mode: 'Markdown' }
   );
 });
 
@@ -294,10 +309,10 @@ bot.command('upgrade', async (ctx) => {
     .text('🔙 Back', 'back_start');
 
   await ctx.reply(
-    `💎 *Choose Your Plan*\\n\\n` +
-    `🆓 *Free*\\n1 group · basic stats\\n\\n` +
-    `⭐ *Pro* \\- $5/month\\n5 groups · AI insights · advanced stats\\n\\n` +
-    `🏢 *Business* \\- $15/month\\nUnlimited · full analytics · API access`,
+    `💎 *Choose Your Plan*\n\n` +
+    `🆓 *Free*\n1 group · basic stats\n\n` +
+    `⭐ *Pro* \\- $5/month\n5 groups · AI insights · advanced stats\n\n` +
+    `🏢 *Business* \\- $15/month\nUnlimited · full analytics · API access`,
     {
       parse_mode: 'Markdown',
       reply_markup: keyboard
@@ -338,12 +353,12 @@ bot.command('ai', async (ctx) => {
   );
 
   await ctx.reply(
-    `🤖 *AI Analysis*\\n\\n` +
-    `💡 *Insight:*\\n${insight}\\n\\n` +
-    `🚀 *Growth Tips:*\\n` +
+    `🤖 *AI Analysis*\n\n` +
+    `💡 *Insight:*\n${insight}\n\n` +
+    `🚀 *Growth Tips:*\n` +
     tips
       .map((t: string, i: number) => `${i + 1}. ${t}`)
-      .join('\\n'),
+      .join('\n'),
     {
       parse_mode: 'Markdown'
     }
@@ -352,7 +367,7 @@ bot.command('ai', async (ctx) => {
 
 bot.command('support', async (ctx) => {
   await ctx.reply(
-    '📧 support@growlytics.bot\\nWe reply within 24h.'
+    '📧 support@growlytics.bot\nWe reply within 24h.'
   );
 });
 
@@ -367,11 +382,11 @@ bot.callbackQuery('referral_stats', async (ctx) => {
   const link = `https://t.me/${ctx.me.username}?start=${refCode}`;
 
   await ctx.editMessageText(
-    `🎯 *Referral Program*\\n\\n` +
-    `Total: ${stats.total}\\n` +
-    `✅ Converted: ${stats.converted}\\n` +
-    `⏳ Pending: ${stats.pending}\\n\\n` +
-`🔗 *Your Link:*\n\`${link}\`\n\n` +
+    `🎯 *Referral Program*\n\n` +
+    `Total: ${stats.total}\n` +
+    `✅ Converted: ${stats.converted}\n` +
+    `⏳ Pending: ${stats.pending}\n\n` +
+    `🔗 *Your Link:*\n\`${link}\`\n\n` +
     `💰 Earn 5 credits per friend!`,
     {
       parse_mode: 'Markdown'
@@ -410,7 +425,7 @@ bot.callbackQuery('back_start', async (ctx) => {
     .text('🎁 Referral', 'referral_stats');
 
   await ctx.editMessageText(
-    `👋 *Growlytics*\\n\\nAI-powered community analytics.`,
+    `👋 *Growlytics*\n\nAI-powered community analytics.`,
     {
       parse_mode: 'Markdown',
       reply_markup: keyboard
@@ -429,10 +444,10 @@ bot.callbackQuery('show_upgrade', async (ctx) => {
     .text('🔙 Back', 'back_start');
 
   await ctx.editMessageText(
-    `💎 *Choose Your Plan*\\n\\n` +
-    `🆓 *Free*\\n1 group · basic stats\\n\\n` +
-    `⭐ Pro \\- $5/month\\n5 groups · AI insights · advanced stats\\n\\n` +
-    `🏢 Business \\- $15/month\\nUnlimited · full analytics · API access`,
+    `💎 *Choose Your Plan*\n\n` +
+    `🆓 *Free*\n1 group · basic stats\n\n` +
+    `⭐ Pro \\- $5/month\n5 groups · AI insights · advanced stats\n\n` +
+    `🏢 Business \\- $15/month\nUnlimited · full analytics · API access`,
     {
       parse_mode: 'Markdown',
       reply_markup: keyboard
@@ -474,7 +489,6 @@ bot.callbackQuery('pay_pro', async (ctx) => {
   }
 });
 
-// ====== ANALYTICS TRACKING ======
 bot.callbackQuery('pay_business', async (ctx) => {
   if (!ctx.from) return;
 
@@ -509,84 +523,62 @@ bot.callbackQuery('pay_business', async (ctx) => {
     });
   }
 });
+
+// ====== ANALYTICS TRACKING ======
+
 bot.on('message', async (ctx) => {
   if (!ctx.chat || ctx.chat.type === 'private') return;
 
   try {
     const groupId = ctx.chat.id;
+    const date = new Date().toISOString().split('T')[0];
 
-    const date = new Date()
-      .toISOString()
-      .split('T')[0];
+    // تسجيل/تحديث بيانات المجموعة
+    await pool.query(
+      `INSERT INTO groups
+       (telegram_group_id, group_name, added_by)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (telegram_group_id)
+       DO UPDATE SET
+         group_name = EXCLUDED.group_name,
+         added_by = COALESCE(groups.added_by, EXCLUDED.added_by)`,
+      [
+        groupId,
+        ctx.chat.title || 'Unknown',
+        ctx.from?.id || null
+      ]
+    );
 
-    // Make sure the group exists
-await pool.query(
-  `INSERT INTO groups
-   (telegram_group_id, group_name)
-   VALUES ($1, $2)
-   ON CONFLICT (telegram_group_id)
-   DO UPDATE SET
-     group_name = EXCLUDED.group_name`,
-  [
-    groupId,
-    ctx.chat.title || 'Unknown'
-  ]
-);
-console.log(
-  `📩 Message received in group ${groupId}`
-);
+    console.log(`📩 Message received in group ${groupId}`);
+    await ctx.reply('✅ Growlytics received this message.');
 
-// Record today's message activity
-await pool.query(
-  `INSERT INTO analytics
-   (group_id, date, messages_count, active_users)
-   VALUES ($1, $2, 1, 1)
-   ON CONFLICT (group_id, date)
-   DO UPDATE SET
-     messages_count =
-       analytics.messages_count + 1`,
-  [
-    groupId,
-    date
-  ]
-);
-    // Record today's message activity
+    // تسجيل نشاط اليوم (بدون تكرار)
     await pool.query(
       `INSERT INTO analytics
        (group_id, date, messages_count, active_users)
        VALUES ($1, $2, 1, 1)
        ON CONFLICT (group_id, date)
        DO UPDATE SET
-         messages_count =
-           analytics.messages_count + 1`,
-      [
-        groupId,
-        date
-      ]
+         messages_count = analytics.messages_count + 1`,
+      [groupId, date]
     );
 
   } catch (err) {
-    console.error(
-      'Analytics error:',
-      err
-    );
+    console.error('Analytics error:', err);
   }
 });
+
 bot.on('my_chat_member', async (ctx) => {
   const chat = ctx.myChatMember.chat;
+  const newMember = ctx.myChatMember.new_chat_member;
 
-  if (
-    chat.type === 'private' ||
-    ctx.myChatMember.new_chat_member.user.is_bot === false
-  ) {
-    return;
-  }
+  if (chat.type === 'private') return;
 
-  const oldStatus =
-    ctx.myChatMember.old_chat_member.status;
+  // التأكد إن البوت نفسه هو اللي اتضاف/اتغير وضعه
+  if (newMember.user.id !== ctx.me.id) return;
 
-  const newStatus =
-    ctx.myChatMember.new_chat_member.status;
+  const oldStatus = ctx.myChatMember.old_chat_member.status;
+  const newStatus = newMember.status;
 
   const botWasAdded =
     ['left', 'kicked'].includes(oldStatus) &&
@@ -594,7 +586,7 @@ bot.on('my_chat_member', async (ctx) => {
 
   if (!botWasAdded) return;
 
-  const addedBy = ctx.from.id;
+  const addedBy = ctx.from?.id;
 
   try {
     await pool.query(
@@ -604,38 +596,25 @@ bot.on('my_chat_member', async (ctx) => {
        ON CONFLICT (telegram_group_id)
        DO UPDATE SET
          group_name = EXCLUDED.group_name,
-         added_by = EXCLUDED.added_by`,
+         added_by = COALESCE(groups.added_by, EXCLUDED.added_by)`,
       [
         chat.id,
         chat.title || 'Unknown',
-        addedBy
+        addedBy || null
       ]
     );
 
-    console.log(
-      `Group registered: ${chat.id} by ${addedBy}`
-    );
+    console.log(`Group registered: ${chat.id} by ${addedBy}`);
   } catch (err) {
-    console.error(
-      'Group registration error:',
-      err
-    );
+    console.error('Group registration error:', err);
   }
 });
+
 bot.on(':new_chat_members', async (ctx) => {
-  if (
-    !ctx.chat ||
-    ctx.chat.type === 'private'
-  ) {
-    return;
-  }
+  if (!ctx.chat || ctx.chat.type === 'private') return;
 
-  const date = new Date()
-    .toISOString()
-    .split('T')[0];
-
-  const count =
-    ctx.message?.new_chat_members?.length || 1;
+  const date = new Date().toISOString().split('T')[0];
+  const count = ctx.message?.new_chat_members?.length || 1;
 
   try {
     await pool.query(
@@ -644,33 +623,18 @@ bot.on(':new_chat_members', async (ctx) => {
        VALUES ($1, $2, $3)
        ON CONFLICT (group_id, date)
        DO UPDATE SET
-         new_members =
-           analytics.new_members + $3`,
-      [
-        ctx.chat.id,
-        date,
-        count
-      ]
+         new_members = analytics.new_members + $3`,
+      [ctx.chat.id, date, count]
     );
   } catch (err) {
-    console.error(
-      'New member analytics error:',
-      err
-    );
+    console.error('New member analytics error:', err);
   }
 });
 
 bot.on(':left_chat_member', async (ctx) => {
-  if (
-    !ctx.chat ||
-    ctx.chat.type === 'private'
-  ) {
-    return;
-  }
+  if (!ctx.chat || ctx.chat.type === 'private') return;
 
-  const date = new Date()
-    .toISOString()
-    .split('T')[0];
+  const date = new Date().toISOString().split('T')[0];
 
   try {
     await pool.query(
@@ -679,20 +643,14 @@ bot.on(':left_chat_member', async (ctx) => {
        VALUES ($1, $2, 1)
        ON CONFLICT (group_id, date)
        DO UPDATE SET
-         left_members =
-           analytics.left_members + 1`,
-      [
-        ctx.chat.id,
-        date
-      ]
+         left_members = analytics.left_members + 1`,
+      [ctx.chat.id, date]
     );
   } catch (err) {
-    console.error(
-      'Left member analytics error:',
-      err
-    );
+    console.error('Left member analytics error:', err);
   }
 });
+
 // ====== ERROR HANDLING ======
 
 bot.catch((err) => {
@@ -705,20 +663,11 @@ bot.catch((err) => {
   const e = err.error;
 
   if (e instanceof GrammyError) {
-    console.error(
-      'Telegram:',
-      e.description
-    );
+    console.error('Telegram:', e.description);
   } else if (e instanceof HttpError) {
-    console.error(
-      'HTTP:',
-      e
-    );
+    console.error('HTTP:', e);
   } else {
-    console.error(
-      'Unknown:',
-      e
-    );
+    console.error('Unknown:', e);
   }
 });
 
@@ -730,230 +679,158 @@ app.get('/miniapp', (req, res) => {
 
 // ====== EXPRESS API ======
 
-app.get(
-  '/api/health',
-  (req, res) =>
+app.get('/api/health', (req, res) =>
+  res.json({
+    status: 'ok',
+    time: new Date().toISOString()
+  })
+);
+
+app.get('/api/stats/:userId', async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId, 10);
+    if (isNaN(userId)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    const user = await pool.query(
+      `SELECT * FROM users WHERE telegram_id = $1`,
+      [userId]
+    );
+
+    const groups = await pool.query(
+      `SELECT * FROM groups WHERE added_by = $1`,
+      [userId]
+    );
+
+    const analytics = await pool.query(
+      `SELECT COALESCE(SUM(messages_count), 0) AS messages
+       FROM analytics
+       WHERE group_id IN (
+         SELECT telegram_group_id FROM groups WHERE added_by = $1
+       )`,
+      [userId]
+    );
+
+    const referrals = await getReferralStats(userId);
+
+    const payments = await pool.query(
+      `SELECT * FROM payments WHERE user_id = $1 ORDER BY created_at DESC`,
+      [userId]
+    );
+
     res.json({
-      status: 'ok',
-      time: new Date().toISOString()
-    })
-);
-
-app.get(
-  '/api/stats/:userId',
-  async (req, res) => {
-    try {
-      const userId = parseInt(
-        req.params.userId,
-        10
-      );
-
-      const user = await pool.query(
-        `SELECT *
-         FROM users
-         WHERE telegram_id = $1`,
-        [userId]
-      );
-
-      const groups = await pool.query(
-        `SELECT *
-         FROM groups
-         WHERE added_by = $1`,
-        [userId]
-      );
-
-      const analytics = await pool.query(
-        `SELECT
-           COALESCE(SUM(messages_count), 0) AS messages
-         FROM analytics
-         WHERE group_id IN (
-           SELECT telegram_group_id
-           FROM groups
-           WHERE added_by = $1
-         )`,
-        [userId]
-      );
-
-      const referrals =
-        await getReferralStats(userId);
-
-      const payments = await pool.query(
-        `SELECT *
-         FROM payments
-         WHERE user_id = $1
-         ORDER BY created_at DESC`,
-        [userId]
-      );
-
-      res.json({
-        user: user.rows[0] || null,
-        groups: groups.rows,
-        analytics: {
-          messages: parseInt(
-            analytics.rows[0].messages,
-            10
-          )
-        },
-        referrals,
-        payments: payments.rows
-      });
-    } catch (err) {
-      res.status(500).json({
-        error: 'Server error'
-      });
-    }
+      user: user.rows[0] || null,
+      groups: groups.rows,
+      analytics: {
+        messages: parseInt(analytics.rows[0].messages, 10)
+      },
+      referrals,
+      payments: payments.rows
+    });
+  } catch (err) {
+    console.error('Stats API error:', err);
+    res.status(500).json({ error: 'Server error' });
   }
-);
+});
 
-app.get(
-  '/api/admin/stats',
-  async (req, res) => {
-    try {
-      const users = await pool.query(
-        `SELECT COUNT(*) FROM users`
-      );
+app.get('/api/admin/stats', async (req, res) => {
+  try {
+    const users = await pool.query(`SELECT COUNT(*) FROM users`);
 
-      const paid = await pool.query(
-        `SELECT COUNT(*)
-         FROM users
-         WHERE plan != 'free'`
-      );
+    const paid = await pool.query(
+      `SELECT COUNT(*) FROM users WHERE plan != 'free'`
+    );
 
-      const revenue = await pool.query(
-        `SELECT COALESCE(SUM(amount), 0)
-         FROM payments
-         WHERE status = 'completed'`
-      );
+    const revenue = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0) FROM payments WHERE status = 'completed'`
+    );
 
-      const mrr = await pool.query(
-        `SELECT COALESCE(
-           SUM(
-             CASE
-               WHEN plan = 'pro' THEN 5
-               WHEN plan = 'business' THEN 15
-               ELSE 0
-             END
-           ),
-           0
-         )
-         FROM users
-         WHERE plan != 'free'`
-      );
+    const mrr = await pool.query(
+      `SELECT COALESCE(
+         SUM(
+           CASE
+             WHEN plan = 'pro' THEN 5
+             WHEN plan = 'business' THEN 15
+             ELSE 0
+           END
+         ),
+         0
+       )
+       FROM users WHERE plan != 'free'`
+    );
 
-      const dau = await pool.query(
-        `SELECT COUNT(DISTINCT user_id)
-         FROM usage_logs
-         WHERE created_at >=
-           NOW() - INTERVAL '24 hours'`
-      );
+    const dau = await pool.query(
+      `SELECT COUNT(DISTINCT user_id)
+       FROM usage_logs
+       WHERE created_at >= NOW() - INTERVAL '24 hours'`
+    );
 
-      res.json({
-        totalUsers:
-          parseInt(users.rows[0].count, 10),
-
-        paidUsers:
-          parseInt(paid.rows[0].count, 10),
-
-        totalRevenue:
-          parseFloat(revenue.rows[0].coalesce),
-
-        mrr:
-          parseFloat(mrr.rows[0].coalesce),
-
-        dau:
-          parseInt(dau.rows[0].count, 10)
-      });
-    } catch (err) {
-      res.status(500).json({
-        error: 'Server error'
-      });
-    }
+    res.json({
+      totalUsers: parseInt(users.rows[0].count, 10),
+      paidUsers: parseInt(paid.rows[0].count, 10),
+      totalRevenue: parseFloat(revenue.rows[0].coalesce),
+      mrr: parseFloat(mrr.rows[0].coalesce),
+      dau: parseInt(dau.rows[0].count, 10)
+    });
+  } catch (err) {
+    console.error('Admin stats error:', err);
+    res.status(500).json({ error: 'Server error' });
   }
-);
+});
 
-app.get(
-  '/api/ai/insights/:groupId',
-  async (req, res) => {
-    try {
-      const groupId = parseInt(
-        req.params.groupId,
-        10
-      );
-
-      const today = new Date()
-        .toISOString()
-        .split('T')[0];
-
-      const insight =
-        await analyzeGroupSentiment(
-          groupId,
-          today
-        );
-
-      const tips =
-        await generateGrowthTips(
-          groupId
-        );
-
-      res.json({
-        insight,
-        tips,
-        date: today
-      });
-    } catch (err) {
-      res.status(500).json({
-        error: 'AI analysis failed'
-      });
+app.get('/api/ai/insights/:groupId', async (req, res) => {
+  try {
+    const groupId = parseInt(req.params.groupId, 10);
+    if (isNaN(groupId)) {
+      return res.status(400).json({ error: 'Invalid group ID' });
     }
+
+    const today = new Date().toISOString().split('T')[0];
+
+    const insight = await analyzeGroupSentiment(groupId, today);
+    const tips = await generateGrowthTips(groupId);
+
+    res.json({
+      insight,
+      tips,
+      date: today
+    });
+  } catch (err) {
+    console.error('AI insights error:', err);
+    res.status(500).json({ error: 'AI analysis failed' });
   }
-);
+});
 
 // ====== WEBHOOK MODE ======
 
-const PORT =
-  process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'secret';
+const WEBHOOK_PATH = `/telegram-webhook/${WEBHOOK_SECRET}`;
 
-const WEBHOOK_PATH =
-  `/telegram-webhook/${
-    process.env.WEBHOOK_SECRET || 'secret'
-  }`;
+// ⚠️ مهمة: تسجيل الـ webhook middleware قبل app.listen
+app.use(WEBHOOK_PATH, webhookCallback(bot, 'express'));
 
 app.listen(PORT, async () => {
-  console.log(
-    `🌐 Web server on port ${PORT}`
-  );
+  console.log(`🌐 Web server on port ${PORT}`);
 
   if (process.env.WEB_APP_URL) {
-    const webhookUrl =
-      `${process.env.WEB_APP_URL}${WEBHOOK_PATH}`;
+    const webhookUrl = `${process.env.WEB_APP_URL}${WEBHOOK_PATH}`;
 
-    await bot.api.setWebhook(
-  webhookUrl,
-  {
-    allowed_updates: [
-      'message',
-      'my_chat_member'
-    ]
-  }
-);
+    await bot.api.setWebhook(webhookUrl, {
+      allowed_updates: [
+        'message',
+        'my_chat_member',
+        'callback_query',
+        'pre_checkout_query'
+      ]
+    });
 
-    console.log(
-      `🔗 Webhook set: ${webhookUrl}`
-    );
-
-    app.use(
-      WEBHOOK_PATH,
-      webhookCallback(bot, 'express')
-    );
+    console.log(`🔗 Webhook set: ${webhookUrl}`);
   } else {
-    console.log(
-      '⚠️ No WEB_APP_URL, using polling mode'
-    );
-
+    console.log('⚠️ No WEB_APP_URL, using polling mode');
     bot.start();
   }
 });
 
-console.log(
-  '🚀 Growlytics Bot v2.0 starting...'
-);
+console.log('🚀 Growlytics Bot v2.0 starting...');
