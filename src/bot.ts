@@ -811,22 +811,27 @@ const WEBHOOK_PATH = `/telegram-webhook/${WEBHOOK_SECRET}`;
 // ⚠️ مهمة: تسجيل الـ webhook middleware قبل app.listen
 app.use(WEBHOOK_PATH, webhookCallback(bot, 'express'));
 
-app.listen(PORT, async () => {
+app.listen(Number(PORT), '0.0.0.0', async () => {
   console.log(`🌐 Web server on port ${PORT}`);
 
   if (process.env.WEB_APP_URL) {
     const webhookUrl = `${process.env.WEB_APP_URL}${WEBHOOK_PATH}`;
 
-    await bot.api.setWebhook(webhookUrl, {
-      allowed_updates: [
-        'message',
-        'my_chat_member',
-        'callback_query',
-        'pre_checkout_query'
-      ]
-    });
+    try {
+      await bot.api.setWebhook(webhookUrl, {
+        allowed_updates: [
+          'message',
+          'my_chat_member',
+          'callback_query',
+          'pre_checkout_query'
+        ]
+      });
 
-    console.log(`🔗 Webhook set: ${webhookUrl}`);
+      console.log(`🔗 Webhook set: ${webhookUrl}`);
+    } catch (err) {
+      console.error('Webhook setup error:', err);
+      console.error('⚠️ Server is still running; webhook setup failed.');
+    }
   } else {
     console.log('⚠️ No WEB_APP_URL, using polling mode');
     bot.start();
