@@ -33,6 +33,20 @@ const APP_TIMEZONE = process.env.APP_TIMEZONE || 'UTC';
 const bot = new Bot(process.env.BOT_TOKEN || '');
 const app: Application = express();
 
+async function ensureAnalyticsTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS group_active_users (
+      id SERIAL PRIMARY KEY,
+      group_id BIGINT NOT NULL REFERENCES groups(telegram_group_id),
+      date DATE NOT NULL DEFAULT CURRENT_DATE,
+      user_id BIGINT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(group_id, date, user_id)
+    )
+  `);
+}
+
+
 app.use(cors());
 app.use(express.json());
 app.use('/api/payments', paymentsRouter);
@@ -612,6 +626,7 @@ bot.on('message', async (ctx) => {
     }
 
     console.log(`📩 Message received in group ${groupId}`);
+
   } catch (err) {
     console.error('Analytics error:', err);
   }
@@ -908,6 +923,12 @@ const WEBHOOK_PATH = `/telegram-webhook/${WEBHOOK_SECRET}`;
 app.use(WEBHOOK_PATH, webhookCallback(bot, 'express'));
 
 app.listen(Number(PORT), '0.0.0.0', async () => {
+  try {
+    await ensureAnalyticsTables();
+    console.log('✅ Analytics tables ready');
+  } catch (err) {
+    console.error('❌ Analytics table setup error:', err);
+  }
   console.log(`🌐 Web server on port ${PORT}`);
 
   if (process.env.WEB_APP_URL) {

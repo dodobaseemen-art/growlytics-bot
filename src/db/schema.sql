@@ -8,7 +8,11 @@ CREATE TABLE IF NOT EXISTS users (
     is_premium BOOLEAN DEFAULT FALSE,
     referral_code VARCHAR(20) UNIQUE,
     referred_by BIGINT REFERENCES users(telegram_id),
-    credits INTEGER DEFAULT 0
+    credits INTEGER DEFAULT 0,
+    is_admin BOOLEAN DEFAULT FALSE,
+    plan VARCHAR(20) DEFAULT 'free',
+    stripe_subscription_id VARCHAR(255),
+    stripe_customer_id VARCHAR(255)
 );
 
 CREATE TABLE IF NOT EXISTS groups (
@@ -55,4 +59,37 @@ CREATE TABLE IF NOT EXISTS referrals (
     status VARCHAR(20) DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     converted_at TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS group_active_users (
+    id SERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL REFERENCES groups(telegram_group_id),
+    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    user_id BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(group_id, date, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+    id SERIAL PRIMARY KEY,
+    user_id BIGINT REFERENCES users(telegram_id),
+    amount NUMERIC NOT NULL DEFAULT 0,
+    currency VARCHAR(10) DEFAULT 'USD',
+    plan VARCHAR(20),
+    status VARCHAR(20) DEFAULT 'pending',
+    provider VARCHAR(50),
+    provider_payment_id VARCHAR(255),
+    provider_subscription_id VARCHAR(255),
+    paid_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS usage_logs (
+    id SERIAL PRIMARY KEY,
+    telegram_id BIGINT,
+    action VARCHAR(255),
+    credits_used INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    user_id BIGINT,
+    details TEXT
 );
