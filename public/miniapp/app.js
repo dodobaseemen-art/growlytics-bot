@@ -4,12 +4,17 @@ tg.ready();
 tg.expand();
 
 const user = tg.initDataUnsafe?.user;
+const authHeaders = {
+  'X-Telegram-Init-Data': tg.initData
+};
 
 async function loadStats() {
   if (!user) return;
 
   try {
-    const res = await fetch(`/api/stats/${user.id}`);
+    const res = await fetch(`/api/stats/${user.id}`, {
+      headers: authHeaders
+    });
     const data = await res.json();
 
     document.getElementById('credits').textContent =
@@ -59,7 +64,9 @@ function formatPeakHour(hour) {
 
 async function loadAIInsights(groupId) {
   try {
-    const res = await fetch(`/api/ai/insights/${groupId}`);
+    const res = await fetch(`/api/ai/insights/${groupId}`, {
+      headers: authHeaders
+    });
     const data = await res.json();
 
     document.getElementById('ai-insight').textContent =
@@ -93,7 +100,8 @@ async function selectPlan(plan) {
     const res = await fetch('/api/payments/create-checkout', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...authHeaders
       },
       body: JSON.stringify({
         userId: user.id,

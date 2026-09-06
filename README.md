@@ -18,8 +18,9 @@ The stats API now returns `activeUsers`, `peakHour`, and `engagement` per group 
 1. Fill `.env` with your keys
 2. Run `src/db/schema.sql` on PostgreSQL for a new database. For an existing database, run `src/db/migrations/001_message_events_and_analytics_metrics.sql` and then `src/db/migrations/002_billing_schema.sql`.
 3. Set `APP_TIMEZONE` to an IANA timezone such as `Africa/Cairo` or `UTC` so `peak_hour` uses the intended local time.
-4. `npm install && npm run build && npm start`
-5. Run `npm test` to build the project and verify the analytics metric helpers.
+4. Set strong random values for `WEBHOOK_SECRET` and `ADMIN_API_TOKEN`; both are required when the server starts or when the admin endpoint is used.
+5. `npm ci && npm run build && npm start`
+6. Run `npm test` to build the project and verify the analytics and billing contracts.
 
 ## Render Deploy
 - Build: `npm install && npm run build`
