@@ -27,10 +27,26 @@ CREATE TABLE IF NOT EXISTS analytics (
     date DATE DEFAULT CURRENT_DATE,
     messages_count INTEGER DEFAULT 0,
     active_users INTEGER DEFAULT 0,
+    peak_hour INTEGER CHECK (peak_hour IS NULL OR peak_hour BETWEEN 0 AND 23),
     new_members INTEGER DEFAULT 0,
     left_members INTEGER DEFAULT 0,
     UNIQUE(group_id, date)
 );
+
+CREATE TABLE IF NOT EXISTS message_events (
+    id BIGSERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL REFERENCES groups(telegram_group_id) ON DELETE CASCADE,
+    user_id BIGINT,
+    message_id BIGINT NOT NULL,
+    sent_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(group_id, message_id)
+);
+
+CREATE INDEX IF NOT EXISTS message_events_group_sent_at_idx
+    ON message_events (group_id, sent_at);
+
+CREATE INDEX IF NOT EXISTS message_events_group_user_sent_at_idx
+    ON message_events (group_id, user_id, sent_at);
 
 CREATE TABLE IF NOT EXISTS referrals (
     id SERIAL PRIMARY KEY,

@@ -5,6 +5,7 @@
   "main": "dist/bot.js",
   "scripts": {
     "build": "tsc",
+    "test": "npm run build && node --test tests/*.test.mjs",
     "start": "node dist/bot.js",
     "dev": "ts-node src/bot.ts"
   },

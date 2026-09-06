@@ -23,9 +23,12 @@ import {
 } from './utils/ai';
 import paymentsRouter from './routes/payments';
 import { createStarsInvoice } from './utils/stars';
+import { calculateEngagement } from './utils/analytics';
 import webhookRouter from './routes/webhook';
 
 dotenv.config();
+
+const APP_TIMEZONE = process.env.APP_TIMEZONE || 'UTC';
 
 const bot = new Bot(process.env.BOT_TOKEN || '');
 const app: Application = express();
@@ -529,11 +532,13 @@ bot.callbackQuery('pay_business', async (ctx) => {
 bot.on('message', async (ctx) => {
   if (!ctx.chat || ctx.chat.type === 'private') return;
 
-  try {
-    const groupId = ctx.chat.id;
-    const date = new Date().toISOString().split('T')[0];
+  const groupId = ctx.chat.id;
+  const messageId = ctx.message?.message_id;
+  const userId = ctx.from?.id || null;
 
-    // تسجيل/تحديث بيانات المجموعة
+  if (!messageId) return;
+
+  try {
     await pool.query(
       `INSERT INTO groups
        (telegram_group_id, group_name, added_by)
@@ -542,27 +547,71 @@ bot.on('message', async (ctx) => {
        DO UPDATE SET
          group_name = EXCLUDED.group_name,
          added_by = COALESCE(groups.added_by, EXCLUDED.added_by)`,
-      [
-        groupId,
-        ctx.chat.title || 'Unknown',
-        ctx.from?.id || null
-      ]
+      [groupId, ctx.chat.title || 'Unknown', userId]
     );
+
+    const recordedAt = new Date();
+    const date = recordedAt.toISOString().split('T')[0];
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const event = await client.query(
+        `INSERT INTO message_events
+         (group_id, user_id, message_id, sent_at)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (group_id, message_id) DO NOTHING
+         RETURNING id`,
+        [groupId, userId, messageId, recordedAt]
+      );
+
+      if (event.rowCount === 0) {
+        await client.query('COMMIT');
+        return;
+      }
+
+      await client.query(
+        `INSERT INTO analytics
+         (group_id, date, messages_count, active_users, peak_hour)
+         VALUES (
+           $1,
+           ($4 AT TIME ZONE $5)::DATE,
+           1,
+           CASE WHEN $2 IS NULL THEN 0 ELSE 1 END,
+           EXTRACT(HOUR FROM $4 AT TIME ZONE $5)::INTEGER
+         )
+         ON CONFLICT (group_id, date)
+         DO UPDATE SET
+           messages_count = analytics.messages_count + 1,
+           active_users = (
+             SELECT COUNT(DISTINCT user_id)::INTEGER
+             FROM message_events
+             WHERE group_id = $1
+               AND (sent_at AT TIME ZONE $5)::DATE = (EXCLUDED.date)
+               AND user_id IS NOT NULL
+           ),
+           peak_hour = (
+             SELECT EXTRACT(HOUR FROM sent_at AT TIME ZONE $5)::INTEGER
+             FROM message_events
+             WHERE group_id = $1
+               AND (sent_at AT TIME ZONE $5)::DATE = (EXCLUDED.date)
+             GROUP BY EXTRACT(HOUR FROM sent_at AT TIME ZONE $5)
+             ORDER BY COUNT(*) DESC, EXTRACT(HOUR FROM sent_at AT TIME ZONE $5)
+             LIMIT 1
+           )`,
+        [groupId, userId, messageId, recordedAt, APP_TIMEZONE]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
 
     console.log(`📩 Message received in group ${groupId}`);
-    await ctx.reply('✅ Growlytics received this message.');
-
-    // تسجيل نشاط اليوم (بدون تكرار)
-    await pool.query(
-      `INSERT INTO analytics
-       (group_id, date, messages_count, active_users)
-       VALUES ($1, $2, 1, 1)
-       ON CONFLICT (group_id, date)
-       DO UPDATE SET
-         messages_count = analytics.messages_count + 1`,
-      [groupId, date]
-    );
-
   } catch (err) {
     console.error('Analytics error:', err);
   }
@@ -704,12 +753,42 @@ app.get('/api/stats/:userId', async (req, res) => {
     );
 
     const analytics = await pool.query(
-      `SELECT COALESCE(SUM(messages_count), 0) AS messages
-       FROM analytics
-       WHERE group_id IN (
+      `SELECT
+         a.group_id,
+         COALESCE(SUM(a.messages_count), 0)::INTEGER AS messages,
+         COALESCE(SUM(a.active_users), 0)::INTEGER AS active_users,
+         (
+           ARRAY_AGG(a.peak_hour ORDER BY a.date DESC)
+           FILTER (WHERE a.peak_hour IS NOT NULL)
+         )[1] AS peak_hour
+       FROM analytics a
+       WHERE a.group_id IN (
          SELECT telegram_group_id FROM groups WHERE added_by = $1
-       )`,
+       )
+       GROUP BY a.group_id
+       ORDER BY a.group_id`,
       [userId]
+    );
+
+    const groupAnalytics = analytics.rows.map((row) => {
+      const messages = Number(row.messages || 0);
+      const activeUsers = Number(row.active_users || 0);
+
+      return {
+        groupId: row.group_id,
+        messages,
+        activeUsers,
+        peakHour: row.peak_hour === null ? null : Number(row.peak_hour),
+        engagement: calculateEngagement(messages, activeUsers)
+      };
+    });
+
+    const totals = groupAnalytics.reduce(
+      (summary, group) => ({
+        messages: summary.messages + group.messages,
+        activeUsers: summary.activeUsers + group.activeUsers
+      }),
+      { messages: 0, activeUsers: 0 }
     );
 
     const referrals = await getReferralStats(userId);
@@ -721,9 +800,26 @@ app.get('/api/stats/:userId', async (req, res) => {
 
     res.json({
       user: user.rows[0] || null,
-      groups: groups.rows,
+      groups: groups.rows.map((group) => ({
+        ...group,
+        analytics: groupAnalytics.find(
+          (item) => String(item.groupId) === String(group.telegram_group_id)
+        ) || {
+          groupId: group.telegram_group_id,
+          messages: 0,
+          activeUsers: 0,
+          peakHour: null,
+          engagement: 0
+        }
+      })),
       analytics: {
-        messages: parseInt(analytics.rows[0].messages, 10)
+        messages: totals.messages,
+        activeUsers: totals.activeUsers,
+        engagement: calculateEngagement(
+          totals.messages,
+          totals.activeUsers
+        ),
+        groups: groupAnalytics
       },
       referrals,
       payments: payments.rows

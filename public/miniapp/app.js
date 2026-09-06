@@ -22,7 +22,16 @@ async function loadStats() {
   data.referrals?.converted || 0;
 
 document.getElementById('messages').textContent =
-  data.analytics?.messages || 0;
+      data.analytics?.messages || 0;
+
+    document.getElementById('active-users').textContent =
+      data.analytics?.activeUsers || 0;
+
+    document.getElementById('peak-hour').textContent =
+      formatPeakHour(data.analytics?.groups?.[0]?.peakHour);
+
+    document.getElementById('engagement').textContent =
+      data.analytics?.engagement || 0;
 
     const plan = data.user?.plan || 'free';
     const badge = document.getElementById('plan-badge');
@@ -41,6 +50,11 @@ document.getElementById('messages').textContent =
   } catch (e) {
     console.error('Load error:', e);
   }
+}
+
+function formatPeakHour(hour) {
+  if (hour === null || hour === undefined) return '—';
+  return `${String(hour).padStart(2, '0')}:00`;
 }
 
 async function loadAIInsights(groupId) {
