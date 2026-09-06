@@ -109,8 +109,17 @@ export async function handleWebhookEvent(
          (user_id, amount, currency, plan, status, provider,
           provider_payment_id, provider_subscription_id, paid_at)
          VALUES
-         ($1, $2, 'USD', $3, 'completed', 'stripe',
-          $4, $5, NOW())`,
+         (
+           (SELECT id FROM users WHERE telegram_id = $1),
+           $2,
+           'USD',
+           $3,
+           'completed',
+           'stripe',
+           $4,
+           $5,
+           NOW()
+         )`,
         [
           userId,
           plan === 'pro' ? 5 : 15,
@@ -123,7 +132,11 @@ export async function handleWebhookEvent(
       await pool.query(
         `INSERT INTO usage_logs
          (user_id, action, details)
-         VALUES ($1, $2, $3)`,
+         VALUES (
+           (SELECT id FROM users WHERE telegram_id = $1),
+           $2,
+           $3
+         )`,
         [
           userId,
           'subscription_activated',
