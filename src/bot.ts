@@ -592,8 +592,8 @@ bot.on('message', async (ctx) => {
            $1,
            ($4 AT TIME ZONE $5)::DATE,
            1,
-           CASE WHEN $2 IS NULL THEN 0 ELSE 1 END,
-           EXTRACT(HOUR FROM $4 AT TIME ZONE $5)::INTEGER
+           CASE WHEN $2::BIGINT IS NULL THEN 0 ELSE 1 END,
+           EXTRACT(HOUR FROM $4 AT TIME ZONE $5::TEXT)::INTEGER
          )
          ON CONFLICT (group_id, date)
          DO UPDATE SET
