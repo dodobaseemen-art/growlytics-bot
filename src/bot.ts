@@ -574,7 +574,7 @@ bot.on('message', async (ctx) => {
       const event = await client.query(
         `INSERT INTO message_events
          (group_id, user_id, message_id, sent_at)
-         VALUES ($1, $2, $3, $4)
+         VALUES ($1::BIGINT, $2::BIGINT, $3::BIGINT, $4::TIMESTAMPTZ)
          ON CONFLICT (group_id, message_id) DO NOTHING
          RETURNING id`,
         [groupId, userId, messageId, recordedAt]
