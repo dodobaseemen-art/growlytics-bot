@@ -34,6 +34,20 @@ const APP_TIMEZONE = process.env.APP_TIMEZONE || 'UTC';
 const bot = new Bot(process.env.BOT_TOKEN || '');
 const app: Application = express();
 
+async function ensureAnalyticsTables() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS group_active_users (
+      id SERIAL PRIMARY KEY,
+      group_id BIGINT NOT NULL REFERENCES groups(telegram_group_id),
+      date DATE NOT NULL DEFAULT CURRENT_DATE,
+      user_id BIGINT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(group_id, date, user_id)
+    )
+  `);
+}
+
+
 app.use(cors());
 app.use(express.json({ limit: '100kb' }));
 app.use('/api/payments', paymentsRouter);
@@ -588,7 +602,7 @@ bot.on('message', async (ctx) => {
       const event = await client.query(
         `INSERT INTO message_events
          (group_id, user_id, message_id, sent_at)
-         VALUES ($1, $2, $3, $4)
+         VALUES ($1::BIGINT, $2::BIGINT, $3::BIGINT, $4::TIMESTAMPTZ)
          ON CONFLICT (group_id, message_id) DO NOTHING
          RETURNING id`,
         [groupId, userId, messageId, recordedAt]
@@ -606,8 +620,8 @@ bot.on('message', async (ctx) => {
            $1,
            ($4 AT TIME ZONE $5)::DATE,
            1,
-           CASE WHEN $2 IS NULL THEN 0 ELSE 1 END,
-           EXTRACT(HOUR FROM $4 AT TIME ZONE $5)::INTEGER
+           CASE WHEN $2::BIGINT IS NULL THEN 0 ELSE 1 END,
+           EXTRACT(HOUR FROM $4 AT TIME ZONE $5::TEXT)::INTEGER
          )
          ON CONFLICT (group_id, date)
          DO UPDATE SET
@@ -640,6 +654,7 @@ bot.on('message', async (ctx) => {
     }
 
     console.log(`📩 Message received in group ${groupId}`);
+
   } catch (err) {
     console.error('Analytics error:', err);
   }
@@ -979,6 +994,12 @@ const WEBHOOK_PATH = `/telegram-webhook/${WEBHOOK_SECRET}`;
 app.use(WEBHOOK_PATH, webhookCallback(bot, 'express'));
 
 app.listen(Number(PORT), '0.0.0.0', async () => {
+  try {
+    await ensureAnalyticsTables();
+    console.log('✅ Analytics tables ready');
+  } catch (err) {
+    console.error('❌ Analytics table setup error:', err);
+  }
   console.log(`🌐 Web server on port ${PORT}`);
 
   if (process.env.WEB_APP_URL) {

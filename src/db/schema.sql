@@ -68,6 +68,15 @@ CREATE TABLE IF NOT EXISTS referrals (
     UNIQUE(referrer_id, referred_id)
 );
 
+CREATE TABLE IF NOT EXISTS group_active_users (
+    id SERIAL PRIMARY KEY,
+    group_id BIGINT NOT NULL REFERENCES groups(telegram_group_id),
+    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    user_id BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(group_id, date, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS payments (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
