@@ -618,10 +618,10 @@ bot.on('message', async (ctx) => {
          (group_id, date, messages_count, active_users, peak_hour)
          VALUES (
            $1,
-           ($4 AT TIME ZONE $5)::DATE,
+           ($3::TIMESTAMPTZ AT TIME ZONE $4::TEXT)::DATE,
            1,
            CASE WHEN $2::BIGINT IS NULL THEN 0 ELSE 1 END,
-           EXTRACT(HOUR FROM $4 AT TIME ZONE $5::TEXT)::INTEGER
+           EXTRACT(HOUR FROM $3::TIMESTAMPTZ AT TIME ZONE $4::TEXT)::INTEGER
          )
          ON CONFLICT (group_id, date)
          DO UPDATE SET
@@ -630,19 +630,19 @@ bot.on('message', async (ctx) => {
              SELECT COUNT(DISTINCT user_id)::INTEGER
              FROM message_events
              WHERE group_id = $1
-               AND (sent_at AT TIME ZONE $5)::DATE = (EXCLUDED.date)
+               AND (sent_at AT TIME ZONE $4::TEXT)::DATE = (EXCLUDED.date)
                AND user_id IS NOT NULL
            ),
            peak_hour = (
-             SELECT EXTRACT(HOUR FROM sent_at AT TIME ZONE $5)::INTEGER
+             SELECT EXTRACT(HOUR FROM sent_at AT TIME ZONE $4::TEXT)::INTEGER
              FROM message_events
              WHERE group_id = $1
-               AND (sent_at AT TIME ZONE $5)::DATE = (EXCLUDED.date)
-             GROUP BY EXTRACT(HOUR FROM sent_at AT TIME ZONE $5)
-             ORDER BY COUNT(*) DESC, EXTRACT(HOUR FROM sent_at AT TIME ZONE $5)
+               AND (sent_at AT TIME ZONE $4::TEXT)::DATE = (EXCLUDED.date)
+             GROUP BY EXTRACT(HOUR FROM sent_at AT TIME ZONE $4::TEXT)
+             ORDER BY COUNT(*) DESC, EXTRACT(HOUR FROM sent_at AT TIME ZONE $4::TEXT)
              LIMIT 1
            )`,
-        [groupId, userId, messageId, recordedAt, APP_TIMEZONE]
+        [groupId, userId, recordedAt, APP_TIMEZONE]
       );
 
       await client.query('COMMIT');
