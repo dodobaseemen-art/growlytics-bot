@@ -24,6 +24,7 @@ import {
 import paymentsRouter from './routes/payments';
 import { createStarsInvoice } from './utils/stars';
 import { calculateEngagement } from './utils/analytics';
+import { getTelegramUserId } from './utils/telegram-auth';
 import webhookRouter from './routes/webhook';
 
 dotenv.config();
@@ -48,7 +49,7 @@ async function ensureAnalyticsTables() {
 
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 app.use('/api/payments', paymentsRouter);
 app.use('/webhook', webhookRouter);
 app.use(express.static(path.join(__dirname, '../public')));
@@ -57,7 +58,26 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 bot.on('pre_checkout_query', async (ctx) => {
   try {
-    await ctx.answerPreCheckoutQuery(true);
+    const query = ctx.preCheckoutQuery;
+    let payload: { userId?: number; plan?: string } = {};
+    try {
+      payload = JSON.parse(query.invoice_payload);
+    } catch {
+      await ctx.answerPreCheckoutQuery(false, 'Invalid payment payload');
+      return;
+    }
+
+    const expectedAmount =
+      payload.plan === 'pro' ? 250 : payload.plan === 'business' ? 750 : 0;
+    const valid =
+      query.currency === 'XTR' &&
+      query.total_amount === expectedAmount &&
+      Number(payload.userId) === query.from.id;
+
+    await ctx.answerPreCheckoutQuery(
+      valid,
+      valid ? undefined : 'Invalid payment details'
+    );
   } catch (err) {
     console.error('Stars pre-checkout error:', err);
   }
@@ -107,7 +127,7 @@ bot.on('message:successful_payment', async (ctx) => {
       [plan, userId]
     );
 
-    await pool.query(
+    const paymentResult = await pool.query(
       `INSERT INTO payments
        (user_id, amount, currency, plan, status, provider,
         provider_payment_id, paid_at)
@@ -121,7 +141,9 @@ bot.on('message:successful_payment', async (ctx) => {
          'telegram_stars',
          $4,
          NOW()
-       )`,
+       )
+       ON CONFLICT (provider, provider_payment_id) DO NOTHING
+       RETURNING id`,
       [
         userId,
         payment.total_amount,
@@ -129,6 +151,8 @@ bot.on('message:successful_payment', async (ctx) => {
         payment.telegram_payment_charge_id
       ]
     );
+
+    if (paymentResult.rowCount === 0) return;
 
     await pool.query(
       `INSERT INTO usage_logs
@@ -236,7 +260,11 @@ bot.command('start', async (ctx) => {
     await pool.query(
       `INSERT INTO usage_logs
        (user_id, action, details)
-       VALUES ($1, $2, $3)`,
+       VALUES (
+         (SELECT id FROM users WHERE telegram_id = $1),
+         $2,
+         $3
+       )`,
       [
         user.id,
         'start',
@@ -738,21 +766,39 @@ bot.catch((err) => {
 // ====== MINI APP ======
 
 app.get('/miniapp', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
+  res.sendFile(path.join(__dirname, '../public/miniapp/index.html'));
 });
 
 // ====== EXPRESS API ======
 
-app.get('/api/health', (req, res) =>
-  res.json({
-    status: 'ok',
-    time: new Date().toISOString()
-  })
-);
+app.get('/api/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({
+      status: 'ok',
+      time: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Health check failed:', err);
+    res.status(503).json({
+      status: 'degraded',
+      time: new Date().toISOString()
+    });
+  }
+});
 
 app.get('/api/stats/:userId', async (req, res) => {
   try {
     const userId = parseInt(req.params.userId, 10);
+    const authenticatedUserId = getTelegramUserId(req);
+    if (
+      isNaN(userId) ||
+      !authenticatedUserId ||
+      authenticatedUserId !== userId
+    ) {
+      return res.status(401).json({ error: 'Telegram authentication required' });
+    }
+
     if (isNaN(userId)) {
       return res.status(400).json({ error: 'Invalid user ID' });
     }
@@ -809,7 +855,11 @@ app.get('/api/stats/:userId', async (req, res) => {
     const referrals = await getReferralStats(userId);
 
     const payments = await pool.query(
-      `SELECT * FROM payments WHERE user_id = $1 ORDER BY created_at DESC`,
+      `SELECT p.*
+       FROM payments p
+       JOIN users u ON u.id = p.user_id
+       WHERE u.telegram_id = $1
+       ORDER BY p.created_at DESC`,
       [userId]
     );
 
@@ -847,6 +897,11 @@ app.get('/api/stats/:userId', async (req, res) => {
 
 app.get('/api/admin/stats', async (req, res) => {
   try {
+    const adminToken = process.env.ADMIN_API_TOKEN;
+    if (!adminToken || req.header('x-admin-token') !== adminToken) {
+      return res.status(401).json({ error: 'Admin authentication required' });
+    }
+
     const users = await pool.query(`SELECT COUNT(*) FROM users`);
 
     const paid = await pool.query(
@@ -893,8 +948,21 @@ app.get('/api/admin/stats', async (req, res) => {
 app.get('/api/ai/insights/:groupId', async (req, res) => {
   try {
     const groupId = parseInt(req.params.groupId, 10);
+    const authenticatedUserId = getTelegramUserId(req);
     if (isNaN(groupId)) {
       return res.status(400).json({ error: 'Invalid group ID' });
+    }
+
+    if (!authenticatedUserId) {
+      return res.status(401).json({ error: 'Telegram authentication required' });
+    }
+
+    const ownedGroup = await pool.query(
+      `SELECT 1 FROM groups WHERE telegram_group_id = $1 AND added_by = $2`,
+      [groupId, authenticatedUserId]
+    );
+    if (ownedGroup.rowCount === 0) {
+      return res.status(403).json({ error: 'Group access denied' });
     }
 
     const today = new Date().toISOString().split('T')[0];
@@ -916,7 +984,10 @@ app.get('/api/ai/insights/:groupId', async (req, res) => {
 // ====== WEBHOOK MODE ======
 
 const PORT = process.env.PORT || 3000;
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'secret';
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+if (!WEBHOOK_SECRET) {
+  throw new Error('WEBHOOK_SECRET must be configured before starting the bot');
+}
 const WEBHOOK_PATH = `/telegram-webhook/${WEBHOOK_SECRET}`;
 
 // ⚠️ مهمة: تسجيل الـ webhook middleware قبل app.listen

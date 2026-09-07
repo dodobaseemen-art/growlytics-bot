@@ -104,13 +104,24 @@ export async function handleWebhookEvent(
         ]
       );
 
-      await pool.query(
+      const paymentResult = await pool.query(
         `INSERT INTO payments
          (user_id, amount, currency, plan, status, provider,
           provider_payment_id, provider_subscription_id, paid_at)
          VALUES
-         ($1, $2, 'USD', $3, 'completed', 'stripe',
-          $4, $5, NOW())`,
+         (
+           (SELECT id FROM users WHERE telegram_id = $1),
+           $2,
+           'USD',
+           $3,
+           'completed',
+           'stripe',
+           $4,
+           $5,
+           NOW()
+         )
+         ON CONFLICT (provider, provider_payment_id) DO NOTHING
+         RETURNING id`,
         [
           userId,
           plan === 'pro' ? 5 : 15,
@@ -120,10 +131,16 @@ export async function handleWebhookEvent(
         ]
       );
 
+      if (paymentResult.rowCount === 0) break;
+
       await pool.query(
         `INSERT INTO usage_logs
          (user_id, action, details)
-         VALUES ($1, $2, $3)`,
+         VALUES (
+           (SELECT id FROM users WHERE telegram_id = $1),
+           $2,
+           $3
+         )`,
         [
           userId,
           'subscription_activated',
