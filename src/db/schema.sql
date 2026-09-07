@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     last_name VARCHAR(255),
     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_premium BOOLEAN DEFAULT FALSE,
+    is_admin BOOLEAN NOT NULL DEFAULT FALSE,
     plan VARCHAR(20) NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'pro', 'business')),
     stripe_customer_id VARCHAR(255),
     stripe_subscription_id VARCHAR(255),

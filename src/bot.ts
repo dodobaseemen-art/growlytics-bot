@@ -35,7 +35,7 @@ const bot = new Bot(process.env.BOT_TOKEN || '');
 const app: Application = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
 app.use('/api/payments', paymentsRouter);
 app.use('/webhook', webhookRouter);
 app.use(express.static(path.join(__dirname, '../public')));
@@ -44,7 +44,26 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 bot.on('pre_checkout_query', async (ctx) => {
   try {
-    await ctx.answerPreCheckoutQuery(true);
+    const query = ctx.preCheckoutQuery;
+    let payload: { userId?: number; plan?: string } = {};
+    try {
+      payload = JSON.parse(query.invoice_payload);
+    } catch {
+      await ctx.answerPreCheckoutQuery(false, 'Invalid payment payload');
+      return;
+    }
+
+    const expectedAmount =
+      payload.plan === 'pro' ? 250 : payload.plan === 'business' ? 750 : 0;
+    const valid =
+      query.currency === 'XTR' &&
+      query.total_amount === expectedAmount &&
+      Number(payload.userId) === query.from.id;
+
+    await ctx.answerPreCheckoutQuery(
+      valid,
+      valid ? undefined : 'Invalid payment details'
+    );
   } catch (err) {
     console.error('Stars pre-checkout error:', err);
   }
@@ -94,7 +113,7 @@ bot.on('message:successful_payment', async (ctx) => {
       [plan, userId]
     );
 
-    await pool.query(
+    const paymentResult = await pool.query(
       `INSERT INTO payments
        (user_id, amount, currency, plan, status, provider,
         provider_payment_id, paid_at)
@@ -108,7 +127,9 @@ bot.on('message:successful_payment', async (ctx) => {
          'telegram_stars',
          $4,
          NOW()
-       )`,
+       )
+       ON CONFLICT (provider, provider_payment_id) DO NOTHING
+       RETURNING id`,
       [
         userId,
         payment.total_amount,
@@ -116,6 +137,8 @@ bot.on('message:successful_payment', async (ctx) => {
         payment.telegram_payment_charge_id
       ]
     );
+
+    if (paymentResult.rowCount === 0) return;
 
     await pool.query(
       `INSERT INTO usage_logs
@@ -223,7 +246,11 @@ bot.command('start', async (ctx) => {
     await pool.query(
       `INSERT INTO usage_logs
        (user_id, action, details)
-       VALUES ($1, $2, $3)`,
+       VALUES (
+         (SELECT id FROM users WHERE telegram_id = $1),
+         $2,
+         $3
+       )`,
       [
         user.id,
         'start',
@@ -729,12 +756,21 @@ app.get('/miniapp', (req, res) => {
 
 // ====== EXPRESS API ======
 
-app.get('/api/health', (req, res) =>
-  res.json({
-    status: 'ok',
-    time: new Date().toISOString()
-  })
-);
+app.get('/api/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({
+      status: 'ok',
+      time: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Health check failed:', err);
+    res.status(503).json({
+      status: 'degraded',
+      time: new Date().toISOString()
+    });
+  }
+});
 
 app.get('/api/stats/:userId', async (req, res) => {
   try {

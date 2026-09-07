@@ -7,7 +7,12 @@ const migration = await readFile(
   new URL('../src/db/migrations/002_billing_schema.sql', import.meta.url),
   'utf8'
 );
+const runtimeMigration = await readFile(
+  new URL('../src/db/migrations/003_runtime_contract.sql', import.meta.url),
+  'utf8'
+);
 const stripe = await readFile(new URL('../src/utils/stripe.ts', import.meta.url), 'utf8');
+const bot = await readFile(new URL('../src/bot.ts', import.meta.url), 'utf8');
 
 for (const [name, sql] of [
   ['bootstrap schema', schema],
@@ -34,6 +39,15 @@ test('Stripe payment records resolve the internal users.id from telegram_id', ()
   );
   assert.match(
     stripe,
+    /INSERT INTO usage_logs[\s\S]*SELECT id FROM users WHERE telegram_id = \$1/i
+  );
+});
+
+test('runtime contract includes the admin column and internal usage-log IDs', () => {
+  assert.match(schema, /is_admin BOOLEAN NOT NULL DEFAULT FALSE/i);
+  assert.match(runtimeMigration, /ADD COLUMN IF NOT EXISTS is_admin/i);
+  assert.match(
+    bot,
     /INSERT INTO usage_logs[\s\S]*SELECT id FROM users WHERE telegram_id = \$1/i
   );
 });

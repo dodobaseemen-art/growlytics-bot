@@ -104,7 +104,7 @@ export async function handleWebhookEvent(
         ]
       );
 
-      await pool.query(
+      const paymentResult = await pool.query(
         `INSERT INTO payments
          (user_id, amount, currency, plan, status, provider,
           provider_payment_id, provider_subscription_id, paid_at)
@@ -119,7 +119,9 @@ export async function handleWebhookEvent(
            $4,
            $5,
            NOW()
-         )`,
+         )
+         ON CONFLICT (provider, provider_payment_id) DO NOTHING
+         RETURNING id`,
         [
           userId,
           plan === 'pro' ? 5 : 15,
@@ -128,6 +130,8 @@ export async function handleWebhookEvent(
           session.subscription
         ]
       );
+
+      if (paymentResult.rowCount === 0) break;
 
       await pool.query(
         `INSERT INTO usage_logs
